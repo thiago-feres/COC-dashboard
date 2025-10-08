@@ -17,7 +17,7 @@ HISTORY_FILE = "members_history.csv"
 # === FUNÇÕES ===
 @st.cache_data
 def get_data(endpoint):
-    url = f"https://api.clashofclans.com/v1{endpoint}"
+    url = f"https://proxy.royaleapi.dev/v1{endpoint}"
     r = requests.get(url, headers=HEADERS)
     if r.status_code == 200:
         return r.json()
