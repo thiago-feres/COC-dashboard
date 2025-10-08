@@ -3,12 +3,14 @@ import pandas as pd
 import requests
 import plotly.express as px
 from datetime import datetime
+import os
 
 # === CONFIGURAÇÕES ===
 st.set_page_config(page_title="Clash of Clans - Dashboard", layout="wide")
 
-TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiIsImtpZCI6IjI4YTMxOGY3LTAwMDAtYTFlYi03ZmExLTJjNzQzM2M2Y2NhNSJ9.eyJpc3MiOiJzdXBlcmNlbGwiLCJhdWQiOiJzdXBlcmNlbGw6Z2FtZWFwaSIsImp0aSI6IjcxZWYwOWM4LTgzNDUtNDc2MS04OGQ4LTZjOTAyYzdlNTJiZiIsImlhdCI6MTc1OTg5NDE0Niwic3ViIjoiZGV2ZWxvcGVyLzJiZGJhYzMzLWU4YTYtYTgwZS01MWQxLWJhMjgxMDdiMzBiMiIsInNjb3BlcyI6WyJjbGFzaCJdLCJsaW1pdHMiOlt7InRpZXIiOiJkZXZlbG9wZXIvc2lsdmVyIiwidHlwZSI6InRocm90dGxpbmcifSx7ImNpZHJzIjpbIjE3OS4yMTIuMTQ5LjE2NiJdLCJ0eXBlIjoiY2xpZW50In1dfQ.QYgfu4XSDaJttyf5tpVe3NNA1uFrWXFmaKF8CpE6to1ABlcZjyGreFEc6zrlcW-s80URj5za66EPh7ozQNcWJg"
-CLAN_TAG = "%232J9GV9YUL"
+# === VARIÁVEIS DE AMBIENTE ===
+TOKEN = os.environ.get("TOKEN")
+CLAN_TAG = os.environ.get("CLAN_TAG")
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 HISTORY_FILE = "members_history.csv"
 
@@ -62,53 +64,68 @@ with tabs[1]:
     if "items" in members and len(members["items"]) > 0:
         df = pd.DataFrame(members["items"])
 
-        # Filtrar apenas as colunas que realmente existem
+        # Filtrar apenas as colunas existentes
         cols_existentes = [c for c in ["tag", "name", "role", "expLevel", "trophies", "donations", "donationsReceived"] if c in df.columns]
         df = df[cols_existentes]
 
-        # --- Carregar histórico anterior ---
+        # --- Histórico de membros ---
         hist = load_member_history()
         today = datetime.now().strftime("%Y-%m-%d")
 
-        # --- Detectar novos membros ---
+        # Detectar novos membros
         new_members = []
         for _, row in df.iterrows():
             if row["tag"] not in hist["tag"].values:
-                new_members.append({"tag": row["tag"], "name": row.get("name", "Desconhecido"), "data_de_entrada": today})
+                new_members.append({
+                    "tag": row["tag"],
+                    "name": row.get("name", "Desconhecido"),
+                    "join_date": today
+                })
 
-        # --- Atualizar histórico ---
+        # Atualizar histórico
         updated_hist = pd.concat([hist, pd.DataFrame(new_members)], ignore_index=True).drop_duplicates("tag", keep="first")
         save_member_history(updated_hist)
 
-        # --- Mesclar data de entrada ---
-df = df.merge(updated_hist, on="tag", how="left")
+        # Mesclar data de entrada
+        df = df.merge(updated_hist, on="tag", how="left")
 
-# --- Garantir que existe uma coluna 'name' ---
-if "name_x" in df.columns:
-    df.rename(columns={"name_x": "name"}, inplace=True)
-elif "name_y" in df.columns:
-    df.rename(columns={"name_y": "name"}, inplace=True)
+        # Garantir que exista uma coluna 'name' para o gráfico
+        if "name_x" in df.columns:
+            df.rename(columns={"name_x": "name"}, inplace=True)
+        elif "name_y" in df.columns:
+            df.rename(columns={"name_y": "name"}, inplace=True)
 
-st.subheader("👥 Membros do Clã")
-st.dataframe(df)
+        st.subheader("👥 Membros do Clã")
+        st.dataframe(df)
 
-# --- Gráfico de doações ---
-if "donations" in df.columns:
-    st.markdown("### 📈 Ranking de Doações")
-    fig = px.bar(df.sort_values("donations", ascending=False),
-                 x="name", y="donations", color="role",
-                 title="Doações por Jogador")
-    st.plotly_chart(fig, use_container_width=True)
+        # --- Gráfico de doações ---
+        if "donations" in df.columns:
+            st.markdown("### 📈 Ranking de Doações")
+            fig = px.bar(
+                df.sort_values("donations", ascending=False),
+                x="name",
+                y="donations",
+                color="role",
+                title="Doações por Jogador"
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
+        # Novos membros detectados
+        if new_members:
+            st.success(f"🎉 {len(new_members)} novo(s) membro(s) detectado(s) hoje!")
+            st.table(pd.DataFrame(new_members)[["name", "join_date"]])
+
+    else:
+        st.error("Nenhum membro encontrado ou resposta vazia da API.")
 
 # === GUERRAS ===
 with tabs[2]:
-    if "items" in warlog:
+    if warlog.get("items"):
         df_war = pd.DataFrame(warlog["items"])
         st.subheader("⚔️ Histórico de Guerras")
         st.dataframe(df_war[["result", "teamSize"]])
 
-        # --- Contagem de resultados ---
+        # Contagem de resultados
         wins = df_war[df_war["result"] == "win"].shape[0]
         losses = df_war[df_war["result"] == "lose"].shape[0]
         draws = df_war[df_war["result"] == "tie"].shape[0]
@@ -118,4 +135,4 @@ with tabs[2]:
         col2.metric("Derrotas", losses)
         col3.metric("Empates", draws)
     else:
-        st.warning("Sem histórico de guerras disponível.")
+        st.warning("Sem histórico de guerras disponível ou token sem permissão.")
