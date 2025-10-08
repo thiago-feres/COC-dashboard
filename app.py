@@ -9,7 +9,8 @@ import os
 st.set_page_config(page_title="Clash of Clans - Dashboard", layout="wide")
 
 # === VARIÁVEIS DE AMBIENTE ===
-TOKEN = os.environ.get("TOKEN")
+
+TOKEN = os.environ.get("ROYAL_API_TOKEN")
 CLAN_TAG = os.environ.get("CLAN_TAG")
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 HISTORY_FILE = "members_history.csv"
